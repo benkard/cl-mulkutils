@@ -81,6 +81,16 @@
           (t                            arglist))))
 
 
+(defun normalise-lambda-args (lambda-args)
+  "Normalise a MULK.LAMBDA argument list.
+
+Aim: Remove the symbol _ from LAMBDA-ARGS if it exists, as its purpose
+is identical to _0.  Return both the normalised LAMBDA-ARGS and the
+removed symbol (if found)."
+  (values (remove "_" lambda-args :key #'symbol-name :test #'string=)
+          (find   "_" lambda-args :key #'symbol-name :test #'string=)))
+
+
 (defmacro efn (function-or-form &rest args)
   "A convenience wrapper for LAMBDA.
 
@@ -98,27 +108,28 @@ But the following will not, because the inner _ is detected by the outer
 FN as an argument, making the latter expect an argument where none is
 given:
 
- (funcall (efn (efn () _)))"
+ (funcall (efn (efn () _)))
+
+NOTE: RELYING ON THE ERRONEOUS BEHAVIOUR OF THIS MACRO IN ORDER TO WRITE
+SLOPPY FUNCTION DEFINITIONS IS NOT GUARANTEED TO WORK IN FUTURE VERSIONS
+OF THE SYSTEM.  IF YOU NEED TO IGNORE VARIABLE ARGUMENT LISTS, USE THE
+FN MACRO INSTEAD.  YOU HAVE BEEN WARNED."
   (cond ((or (not (listp function-or-form))
              (eq 'function (first function-or-form)))
          `(efn (funcall ,function-or-form ,@args)))
         (t
-         (let* ((lambda-args      (find-lambda-args `(progn
-                                                       ,function-or-form
-                                                       ,@args)))
-                (real-lambda-args (remove "_" lambda-args
-                                          :key #'symbol-name
-                                          :test #'string=))
-                (_                (find "_" lambda-args
-                                        :key #'symbol-name
-                                        :test #'string=)))
-           `(symbol-macrolet ,(if _
-                                  `((,_ ,(first real-lambda-args)))
-                                  nil)
-              (function (lambda ,real-lambda-args
-                (declare (ignorable ,@real-lambda-args))
-                ,function-or-form
-                ,@args)))))))
+         (let ((lambda-args      (find-lambda-args `(progn
+                                                      ,function-or-form
+                                                      ,@args))))
+           (multiple-value-bind (real-lambda-args _)
+               (normalise-lambda-args lambda-args)
+             `(symbol-macrolet ,(if _
+                                    `((,_ ,(first real-lambda-args)))
+                                    nil)
+                (function (lambda ,real-lambda-args
+                  (declare (ignorable ,@real-lambda-args))
+                  ,function-or-form
+                  ,@args))))))))
 
 
 (defmacro fn (function-or-form &rest args)
@@ -132,27 +143,23 @@ COLLECT-LAMBDA-ARGS."
              (eq 'function (first function-or-form)))
          `(fn (funcall ,function-or-form ,@args)))
         (t
-         (let* ((lambda-args      (find-lambda-args `(progn
-                                                       ,function-or-form
-                                                       ,@args)))
-                (real-lambda-args (remove "_" lambda-args
-                                          :key #'symbol-name
-                                          :test #'string=))
-                (_                (find "_" lambda-args
-                                        :key #'symbol-name
-                                        :test #'string=))
-                (args-sym         (gensym "FN-ARGS")))
-           `(symbol-macrolet (,@(if _
-                                    `((,_ ,(first real-lambda-args)))
-                                    nil)
-                              ,@(loop for i from 0
-                                      for lambda-arg in real-lambda-args
-                                      collect `(,lambda-arg
-                                                 (nth ,i ,args-sym))))
-              (function (lambda (&rest ,args-sym)
-                (declare (ignorable ,args-sym))
-                ,function-or-form
-                ,@args)))))))
+         (let ((lambda-args      (find-lambda-args `(progn
+                                                      ,function-or-form
+                                                      ,@args)))
+               (args-sym         (gensym "FN-ARGS")))
+           (multiple-value-bind (real-lambda-args _)
+               (normalise-lambda-args lambda-args)
+             `(symbol-macrolet (,@(if _
+                                      `((,_ ,(first real-lambda-args)))
+                                      nil)
+                                ,@(loop for i from 0
+                                        for lambda-arg in real-lambda-args
+                                        collect `(,lambda-arg
+                                                  (nth ,i ,args-sym))))
+                (function (lambda (&rest ,args-sym)
+                  (declare (ignorable ,args-sym))
+                  ,function-or-form
+                  ,@args))))))))
 
 
 (defmacro efn1 (value-or-form &rest forms)
