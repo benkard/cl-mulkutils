@@ -28,16 +28,16 @@
 (deftestsuite mulk-lambda-fn1 (mulk-lambda)
   ()
   (:tests
-   ((ensure (= (funcall (fn () _) 42)
-               42)))
+   ((ensure-same (funcall (fn () _) 42)
+                 42))
    ((ensure-error (funcall (fn _) 42)))
-   ((ensure (= (funcall (fn1 _) 42)
-               42)))
+   ((ensure-same (funcall (fn1 _) 42)
+                 42))
    ((ensure-error (funcall (fn +))))
-   ((ensure (eql (funcall (fn1 +))
-                 +)))
-   ((ensure (= (funcall (fn #'+))
-               0)))
+   ((ensure-same (funcall (fn1 +))
+                 +))
+   ((ensure-same (funcall (fn #'+))
+                 0))
    ((ensure (functionp (funcall (fn1 #'+)))))))
 
 
@@ -49,7 +49,7 @@
    ((ensure (functionp (funcall (fn1 (fn1 _))))))
    ((ensure (functionp (funcall (efn1 (efn1 _))))))
    ((ensure-same (funcall (fn1 _3) 1 2 3 4 5)
-                  4))
+                 4))
    ((ensure-error (funcall (efn1 _3) 1 2 3 4 5)))))
 
 
