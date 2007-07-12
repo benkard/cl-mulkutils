@@ -3,6 +3,10 @@
 (in-package #:mulk.tests)
 
 
+(defun run-all-tests ()
+  (run-tests :suite 'mulk-lambda ))
+
+
 (deftestsuite mulk-lambda ()
   ())
 
@@ -55,7 +59,6 @@
 
 (deftestsuite mulk-lambda-fn* (mulk-lambda)
   ()
-  #+nil
   (:tests
    ((ensure-same (funcall (fn* #'+ 1) 2)
                  3))
@@ -63,4 +66,3 @@
                  3))
    ((ensure-same (funcall (fn* (/ (* _ 4))) 3 6)
                  2))))
-

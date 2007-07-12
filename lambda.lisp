@@ -34,12 +34,20 @@
  | (funcall (efn1 (efn1 _)))             ;=> #<LAMBDA ...>  ; new!
  | (funcall (fn1 _3) 1 2 3 4 5)          ;=> 4
  | (funcall (efn1 _3) 1 2 3 4 5)         ;=> error
+ |
+ |
+ | Currying variant FN* (cf. LIST vs. LIST*)
+ | =========================================
+ |
+ | (funcall (fn* #'+ 1) 2)               ;=> 3
+ | (funcall (fn* #'+) 1 2)               ;=> 3
+ | (funcall (fn* (/ (* _ 4))) 3 6)       ;=> 2
  |#
 
 
 (defpackage #:mulk.lambda
   (:use #:cl)
-  (:export #:efn #:fn #:efn1 #:fn1))
+  (:export #:efn #:fn #:efn1 #:fn1 #:fn*))
 (in-package #:mulk.lambda)
 
 
@@ -99,6 +107,16 @@ removed symbol (if found)."
           (find   "_" lambda-args :key #'symbol-name :test #'string=)))
 
 
+(defun build-fn-form (forms form-builder)
+  (let ((lambda-args (find-lambda-args `(progn ,@forms))))
+    (multiple-value-bind (real-lambda-args _)
+        (normalise-lambda-args lambda-args)
+      `(symbol-macrolet ,(if _
+                             `((,_ ,(first real-lambda-args)))
+                             nil)
+         ,(funcall form-builder real-lambda-args)))))
+
+
 (defmacro efn (function-or-form &rest args)
   "A convenience wrapper for LAMBDA.
 
@@ -107,19 +125,12 @@ format string \"_~D\".  _ can be used as an abbreviation for _0."
   (cond ((or (not (listp function-or-form))
              (eq 'function (first function-or-form)))
          `(efn (funcall ,function-or-form ,@args)))
-        (t
-         (let ((lambda-args      (find-lambda-args `(progn
-                                                      ,function-or-form
-                                                      ,@args))))
-           (multiple-value-bind (real-lambda-args _)
-               (normalise-lambda-args lambda-args)
-             `(symbol-macrolet ,(if _
-                                    `((,_ ,(first real-lambda-args)))
-                                    nil)
-                (function (lambda ,real-lambda-args
-                  (declare (ignorable ,@real-lambda-args))
-                  ,function-or-form
-                  ,@args))))))))
+        (t (build-fn-form (list* function-or-form args)
+                          #'(lambda (real-lambda-args)
+                              `(function (lambda ,real-lambda-args
+                                 (declare (ignorable ,@real-lambda-args))
+                                 ,function-or-form
+                                 ,@args)))))))
 
 
 (defmacro fn (function-or-form &rest args)
@@ -130,24 +141,35 @@ produces do not check the number of their arguments."
   (cond ((or (not (listp function-or-form))
              (eq 'function (first function-or-form)))
          `(fn (funcall ,function-or-form ,@args)))
-        (t
-         (let ((lambda-args      (find-lambda-args `(progn
-                                                      ,function-or-form
-                                                      ,@args)))
-               (args-sym         (gensym "FN-ARGS")))
-           (multiple-value-bind (real-lambda-args _)
-               (normalise-lambda-args lambda-args)
-             `(symbol-macrolet (,@(if _
-                                      `((,_ ,(first real-lambda-args)))
-                                      nil)
-                                ,@(loop for i from 0
-                                        for lambda-arg in real-lambda-args
-                                        collect `(,lambda-arg
-                                                  (nth ,i ,args-sym))))
-                (function (lambda (&rest ,args-sym)
-                  (declare (ignorable ,args-sym))
-                  ,function-or-form
-                  ,@args))))))))
+        (t (build-fn-form
+            (list* function-or-form args)
+            #'(lambda (real-lambda-args)
+                (let ((args-sym (gensym "FN-ARGS")))
+                  `(symbol-macrolet (,@(loop for i from 0
+                                             for lambda-arg in real-lambda-args
+                                             collect `(,lambda-arg
+                                                       (nth ,i ,args-sym))))
+                     (function (lambda (&rest ,args-sym)
+                       (declare (ignorable ,args-sym))
+                       ,function-or-form
+                       ,@args)))))))))
+
+
+(defmacro fn* (function-or-form &rest args)
+  "A currying variant of FN.
+
+(FN* (* 2 (+ _ 2))) is equivalent to (LAMBDA (X &REST ARGS)
+                                       (APPLY #'* 2 (+ X 2) ARGS))."
+  (cond ((and (listp function-or-form)
+              (not (eq 'function (first function-or-form))))
+         `(fn* (function ,(first function-or-form))
+               ,@(rest function-or-form)))
+        (t (let ((rest-sym (gensym "ARGS-REST")))
+             (build-fn-form (list* function-or-form args)
+                            #'(lambda (real-lambda-args)
+                                `(function (lambda (,@real-lambda-args &rest ,rest-sym)
+                                   (declare (ignorable ,@real-lambda-args))
+                                   (apply ,function-or-form ,@args ,rest-sym)))))))))
 
 
 (defmacro efn1 (value-or-form &rest forms)
@@ -160,7 +182,7 @@ produces do not check the number of their arguments."
   (cond ((or (not (listp value-or-form))
              (eq 'function (first value-or-form)))
          `(efn () ,value-or-form ,@forms))
-        (t                           `(efn ,value-or-form ,@forms))))
+        (t `(efn ,value-or-form ,@forms))))
 
 
 (defmacro fn1 (value-or-form &rest forms)
@@ -173,4 +195,4 @@ produces do not check the number of their arguments."
   (cond ((or (not (listp value-or-form))
              (eq 'function (first value-or-form)))
          `(fn () ,value-or-form ,@forms))
-        (t                           `(fn ,value-or-form ,@forms))))
+        (t `(fn ,value-or-form ,@forms))))
