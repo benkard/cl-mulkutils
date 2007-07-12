@@ -29,9 +29,11 @@
  | ================================
  |
  | (funcall (fn (fn () _)))              ;=> #<LAMBDA ...>
- | (funcall (efn (efn () _)))            ;=> error
+ | (funcall (efn (efn () _)))            ;=> #<LAMBDA ...>  ; new!
  | (funcall (fn1 (fn1 _)))               ;=> #<LAMBDA ...>
- | (funcall (efn1 (efn1 _)))             ;=> error
+ | (funcall (efn1 (efn1 _)))             ;=> #<LAMBDA ...>  ; new!
+ | (funcall (fn1 _3) 1 2 3 4 5)          ;=> 4
+ | (funcall (efn1 _3) 1 2 3 4 5)         ;=> error
  |#
 
 
@@ -41,16 +43,22 @@
 (in-package #:mulk.lambda)
 
 
-(defun collect-lambda-args (clause)
-  (typecase clause
-    (list   (mapcan #'collect-lambda-args clause))
-    (symbol (let ((name (symbol-name clause)))
-              (if (or (string= "_" name)
-                      (and (char= #\_ (char name 0))
-                           (ignore-errors
-                             (parse-integer (subseq name 1)))))
-                  (list clause)
-                  nil)))))
+(defun collect-lambda-args (form)
+  (let ((lambda-args (list)))
+    (handler-bind
+        ((arnesi:undefined-variable-reference
+          #'(lambda (c)
+              (with-accessors ((symbol arnesi:name)) c
+                (let ((name (symbol-name symbol)))
+                  (when (or (string= "_" name)
+                            (and (char= #\_ (char name 0))
+                                 (ignore-errors
+                                   (parse-integer (subseq name 1)))))
+                    (push symbol lambda-args))))
+              (invoke-restart 'muffle-warning))))
+      (let ((arnesi:*warn-undefined* t))
+        (arnesi:walk-form form)
+        (nreverse lambda-args)))))
 
 
 (defun find-lambda-args (clause)
@@ -95,25 +103,7 @@ removed symbol (if found)."
   "A convenience wrapper for LAMBDA.
 
 Positional arguments are numbered from 0 and follow the pattern given by the
-format string \"_~D\".  _ can be used as an abbreviation for _0.
-
-FN can be used recursively, but this has to be done with care, for the
-macro will inevitably get confused about the number of arguments it
-should use if a subform uses more lambda arguments than its enclosing FN
-form.  For instance, the following will work:
-
- (funcall (efn (efn () 10) _) 'foo)
-
-But the following will not, because the inner _ is detected by the outer
-FN as an argument, making the latter expect an argument where none is
-given:
-
- (funcall (efn (efn () _)))
-
-NOTE: RELYING ON THE ERRONEOUS BEHAVIOUR OF THIS MACRO IN ORDER TO WRITE
-SLOPPY FUNCTION DEFINITIONS IS NOT GUARANTEED TO WORK IN FUTURE VERSIONS
-OF THE SYSTEM.  IF YOU NEED TO IGNORE VARIABLE ARGUMENT LISTS, USE THE
-FN MACRO INSTEAD.  YOU HAVE BEEN WARNED."
+format string \"_~D\".  _ can be used as an abbreviation for _0."
   (cond ((or (not (listp function-or-form))
              (eq 'function (first function-or-form)))
          `(efn (funcall ,function-or-form ,@args)))
@@ -136,9 +126,7 @@ FN MACRO INSTEAD.  YOU HAVE BEEN WARNED."
   "A less safe but recursively callable variant of EFN.
 
 This macro is like EFN save the fact that the anonymous functions it
-produces do not check the number of their arguments, thereby
-circumventing lambda argument misidentification errors in
-COLLECT-LAMBDA-ARGS."
+produces do not check the number of their arguments."
   (cond ((or (not (listp function-or-form))
              (eq 'function (first function-or-form)))
          `(fn (funcall ,function-or-form ,@args)))

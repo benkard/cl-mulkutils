@@ -45,9 +45,12 @@
   ()
   (:tests
    ((ensure (functionp (funcall (fn (fn () _))))))
-   ((ensure-error (funcall (efn (efn () _)))))
+   ((ensure (functionp (funcall (efn (efn () _))))))
    ((ensure (functionp (funcall (fn1 (fn1 _))))))
-   ((ensure-error (funcall (efn1 (efn1 _)))))))
+   ((ensure (functionp (funcall (efn1 (efn1 _))))))
+   ((ensure-same (funcall (fn1 _3) 1 2 3 4 5)
+                  4))
+   ((ensure-error (funcall (efn1 _3) 1 2 3 4 5)))))
 
 
 (deftestsuite mulk-lambda-fn* (mulk-lambda)
