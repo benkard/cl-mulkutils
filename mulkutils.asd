@@ -1,8 +1,10 @@
 (defsystem "mulkutils"
   :description "Random utilities by Matthias Benkard."
-  :version "0.2.0"
+  :version "0.3pre1"
   :author "Matthias Benkard <matthias@benkard.de>"
   :licence "GNU General Public License, version 2 or higher"
-  :depends-on (:arnesi)
-  :components ((:file "lambda"))
+  :depends-on (:arnesi :unification)
+  :components ((:file "package")
+               (:file "lambda")
+               (:file "unification"))
   :serial t)

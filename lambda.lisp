@@ -45,10 +45,7 @@
  |#
 
 
-(defpackage #:mulk.lambda
-  (:use #:cl)
-  (:export #:efn #:fn #:efn1 #:fn1 #:fn*))
-(in-package #:mulk.lambda)
+(in-package #:mulk.utils)
 
 
 (defun collect-lambda-args (form)
